@@ -1,0 +1,122 @@
+# Practical Machine Learning Week 4 Assignment 
+20 August 2019
+
+## Executive Summary
+A predictive model was developed based on the Weight Lifting Exercise Dataset ( [http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har) ) to predict what exercise was performed.
+
+The Random Forest Model shows a much better accuracy (99.6%) than the Decision Tree Model (74.7%); therefore the Random Forest Model was used for the submission of the final prediction.
+
+
+## Data Loading and Preprocessing
+The training data for this project are available here:
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+The test data are available here:
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+The data for this project come from this source: [http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har)
+```{r, echo=FALSE}
+# Loading libraries
+# library(lattice)
+library(ggplot2)
+library(plyr)
+library(rattle)
+library(rpart)
+library(randomForest)
+library(caret)
+
+# Loading the data
+trainingUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(trainingUrl, destfile="pml-training.csv")
+testingUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(testingUrl, destfile="pml-testing.csv")
+
+rawtraining <-read.csv("pml-training.csv")
+rawtesting <-read.csv("pml-testing.csv")
+```
+
+## Exploratory Data Analysis
+First we have a look at the data:
+```{r, echo=TRUE}
+dim(rawtraining)
+dim(rawtesting)
+```
+
+```{r, echo=TRUE, include=FALSE}
+# Excluded results to limit reporting length
+str(rawtraining)
+head(rawtraining)
+summary(rawtraining)
+
+str(rawtesting)
+head(rawtesting)
+summary(rawtesting)
+```
+Above results show that the raw training data consists of 19622 observations of  160 variables and contains quite some NAs. 
+The raw testing set contains 20 observations of  160 variables.
+
+Since we are only interested in the exercises and not columns like X and the timestamp columns, we remove those from the data (these are the first 7 columns):
+```{r, echo=TRUE}
+# Removing the columns that are not required
+training1 <- rawtraining[,8:160]
+testing1 <- rawtesting[,8:160]
+```
+
+Then the NAs were removed:
+```{r,echo=TRUE}
+# Removing the NAs
+maxNAperc= 20
+maxNA <- nrow(training1) / 100 * maxNAperc
+removecolumns <- which(colSums(is.na(training1) | training1=="") > maxNA)
+training2 <- training1[,-removecolumns]
+testing2 <- testing1[,-removecolumns]
+```
+
+And then factors were converted into integers:
+```{r}
+classeLevels <- levels(training2$classe)
+trainingclean <- data.frame(data.matrix(training2))
+trainingclean$classe <- factor(trainingclean$classe, labels=classeLevels)
+testingclean <- data.frame(data.matrix(testing2)) # validation set
+```
+
+Since the provided test set will be the ultimate validation set, we will first split the provided training set in a test and train set:
+```{r,echo=TRUE}
+set.seed(12345)
+parts <- createDataPartition(trainingclean$classe, p=0.6, list=FALSE)
+trainingsub <- trainingclean[parts,] # training set
+testingsub <- trainingclean[-parts,] # testing set
+```
+
+## Model Construction using Cross Validation
+### Decision Tree Model
+First a Decision Tree Model was used:
+```{r,echo=TRUE}
+FitDTM <- rpart(classe ~ ., data = trainingsub, method="class")
+fancyRpartPlot(FitDTM)
+set.seed(12345)
+predictionDTM <- predict(FitDTM, testingsub, type="class")
+confusionMatrix(predictionDTM, testingsub$classe)
+```
+This model gives only a 74.6% accuracy, so let's try another model to see whether that gives a better prediction.
+
+### Random Forest Model
+Then a Random Forest Model was used:
+```{r,echo=TRUE}
+set.seed(12345)
+FitRFM <- randomForest(classe ~ ., data = trainingsub, ntree = 1000)
+predictionRF <- predict(FitRFM, testingsub, type = "class")
+confusionMatrix(predictionRF, testingsub$classe)
+```
+The Random Forest model shows a much better accuracy (99.6%) on the testset. Therefore, this model will be used as the final predictive model. Below the predictive results are given for both models:
+
+### Predictions on the Validation Set and conclusions
+Following show the results for both models for the Validation set (i.e. the cleaned set of "pml-testing.csv"):
+```{r,echo=TRUE}
+# Decision Tree Model
+predictionDT <- predict(FitDTM, testingclean, type="class")
+predictionDT
+# Random Forest Model
+predictionRF <- predict(FitRFM, testingclean, type="class")
+predictionRF
+```
+The Random Forest Model shows a much better accuracy (99.6%) than the Decision Tree Model (74.7%); therefore the Random Forest Model was used for the submission of the final prediction.
